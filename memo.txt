@@ -1,0 +1,23 @@
+✦ ビルドが成功することを確認しました。公開のための推奨手順をご案内します。
+
+  現在のプロジェクトは adapter-auto を使用しているため、Vercel や Netlify
+  などのホスティングサービスを使えば、特別な設定なしで自動的に最適化されてデプロイ可能です。
+
+  最も簡単で推奨される Vercel を使った公開手順は以下の通りです。
+
+  手順 1: GitHubへのプッシュ
+  まだ行っていない場合は、現在のコードをGitHubのリポジトリにプッシュしてください。
+
+  手順 2: Vercelでの連携 (推奨)
+   1. Vercel (https://vercel.com/) にアクセスし、アカウント作成またはログインします。
+   2. ダッシュボードの "Add New..." > "Project" をクリックします。
+   3. GitHubアカウントを連携し、今回のリポジトリの "Import" ボタンを押します。
+   4. Configure Project 画面が表示されます。
+       * Framework Preset: SvelteKit が自動選択されているはずです。
+       * Build Command: 自動入力のままでOK (vite build)。
+   5. "Deploy" をクリックします。
+
+  手順 3: 公開完了
+  数分でビルドとデプロイが完了し、自動的にURL（例: odpt-transit-app.vercel.app）が発行され、世界中に公開されます。
+
+  ---
