@@ -1,7 +1,50 @@
+// Color mapping for congestion levels (1-7) matching the frontend gradient
+const CONGESTION_COLORS: Record<number, string> = {
+  1: '#6366f1', // Indigo
+  2: '#3b82f6', // Blue
+  3: '#06b6d4', // Cyan
+  4: '#22c55e', // Green
+  5: '#eab308', // Yellow
+  6: '#f97316', // Orange
+  7: '#ef4444'  // Red
+};
+
+// --- API Response Interfaces (snake_case) ---
+
+interface ApiStop {
+  name: string;
+  time: string; // HH:MM
+  congestion_level: number | null;
+}
+
+interface ApiSegment {
+  line: string;
+  from_station: string;
+  to_station: string;
+  departure_time: string; // HH:MM
+  arrival_time: string;   // HH:MM
+  stops: ApiStop[];
+}
+
+interface ApiRoute {
+  id: string;
+  total_duration: number; // minutes
+  fare: number;
+  transfers: number;
+  segments: ApiSegment[];
+}
+
+interface ApiSearchResponse {
+  routes: ApiRoute[];
+}
+
+// --- Application Interfaces (camelCase) ---
+
 export interface StationStop {
   name: string;
   time: string;
-  nextSectionColor?: string; // Color of the line to the next station
+  congestionLevel?: number | null;
+  nextSectionColor?: string; // Mapped color for UI
 }
 
 export interface RouteSegment {
@@ -10,168 +53,99 @@ export interface RouteSegment {
   toStation: string;
   departureTime: string; // HH:MM
   arrivalTime: string;   // HH:MM
-  stops: StationStop[];  // Includes fromStation, intermediate stops, and toStation
+  stops: StationStop[];
 }
 
 export interface RouteResult {
   id: string;
   segments: RouteSegment[];
-  totalDuration: number; // minutes
+  totalDuration: number;
   fare: number;
   transfers: number;
 }
 
-// Simple in-memory cache for prototype
-let mockCache: RouteResult[] = [];
+// In-memory cache to store search results for detail view
+let resultCache: RouteResult[] = [];
 
-// Helper to add minutes to HH:MM string
-const addMinutes = (timeStr: string, minutes: number): string => {
-  const [h, m] = timeStr.split(':').map(Number);
-  const date = new Date();
-  date.setHours(h, m + minutes);
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+// Helper to map API stop to internal StationStop with color
+const mapStop = (apiStop: ApiStop): StationStop => {
+  return {
+    name: apiStop.name,
+    time: apiStop.time,
+    congestionLevel: apiStop.congestion_level,
+    nextSectionColor: apiStop.congestion_level ? CONGESTION_COLORS[apiStop.congestion_level] : undefined
+  };
 };
 
-const CONGESTION_COLORS = {
-  low: '#3b82f6',    // Blue
-  medium: '#eab308', // Yellow
-  high: '#ef4444'    // Red
+// Helper to map API segment to internal RouteSegment
+const mapSegment = (apiSegment: ApiSegment): RouteSegment => {
+  return {
+    line: apiSegment.line,
+    fromStation: apiSegment.from_station,
+    toStation: apiSegment.to_station,
+    departureTime: apiSegment.departure_time,
+    arrivalTime: apiSegment.arrival_time,
+    stops: apiSegment.stops.map(mapStop)
+  };
 };
 
-const getRandomColor = () => {
-  const colors = Object.values(CONGESTION_COLORS);
-  return colors[Math.floor(Math.random() * colors.length)];
+// Helper to map API route to internal RouteResult
+const mapRoute = (apiRoute: ApiRoute): RouteResult => {
+  return {
+    id: apiRoute.id,
+    totalDuration: apiRoute.total_duration,
+    fare: apiRoute.fare,
+    transfers: apiRoute.transfers,
+    segments: apiRoute.segments.map(mapSegment)
+  };
 };
 
-const generateMockData = (from: string, to: string, baseTime: Date): RouteResult[] => {
-  const currentHour = baseTime.getHours();
-  const currentMinute = baseTime.getMinutes();
-  const baseTimeStr = `${currentHour}:${currentMinute.toString().padStart(2, '0')}`;
-
-  const fromName = from || '出発駅';
-  const toName = to || '到着駅';
-
-  return [
-    {
-      id: 'route-1',
-      totalDuration: 45,
-      fare: 550,
-      transfers: 1,
-      segments: [
-        {
-          line: 'JR山手線',
-          fromStation: fromName,
-          toStation: '新宿',
-          departureTime: baseTimeStr,
-          arrivalTime: addMinutes(baseTimeStr, 15),
-          stops: [
-            { name: fromName, time: baseTimeStr, nextSectionColor: CONGESTION_COLORS.low },
-            { name: '途中駅A', time: addMinutes(baseTimeStr, 5), nextSectionColor: CONGESTION_COLORS.medium },
-            { name: '途中駅B', time: addMinutes(baseTimeStr, 10), nextSectionColor: CONGESTION_COLORS.low },
-            { name: '新宿', time: addMinutes(baseTimeStr, 15) }
-          ]
-        },
-        {
-          line: 'JR中央線',
-          fromStation: '新宿',
-          toStation: toName,
-          departureTime: addMinutes(baseTimeStr, 20),
-          arrivalTime: addMinutes(baseTimeStr, 45),
-          stops: [
-            { name: '新宿', time: addMinutes(baseTimeStr, 20), nextSectionColor: CONGESTION_COLORS.high },
-            { name: '四ツ谷', time: addMinutes(baseTimeStr, 28), nextSectionColor: CONGESTION_COLORS.high },
-            { name: 'お茶の水', time: addMinutes(baseTimeStr, 35), nextSectionColor: CONGESTION_COLORS.medium },
-            { name: toName, time: addMinutes(baseTimeStr, 45) }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'route-2',
-      totalDuration: 40,
-      fare: 600,
-      transfers: 2,
-      segments: [
-        {
-          line: '地下鉄A線',
-          fromStation: fromName,
-          toStation: '大手町',
-          departureTime: addMinutes(baseTimeStr, 5),
-          arrivalTime: addMinutes(baseTimeStr, 15),
-          stops: [
-            { name: fromName, time: addMinutes(baseTimeStr, 5), nextSectionColor: CONGESTION_COLORS.low },
-            { name: '大手町', time: addMinutes(baseTimeStr, 15) }
-          ]
-        },
-        {
-          line: '地下鉄B線',
-          fromStation: '大手町',
-          toStation: '飯田橋',
-          departureTime: addMinutes(baseTimeStr, 20),
-          arrivalTime: addMinutes(baseTimeStr, 30),
-          stops: [
-            { name: '大手町', time: addMinutes(baseTimeStr, 20), nextSectionColor: CONGESTION_COLORS.medium },
-            { name: '九段下', time: addMinutes(baseTimeStr, 25), nextSectionColor: CONGESTION_COLORS.low },
-            { name: '飯田橋', time: addMinutes(baseTimeStr, 30) }
-          ]
-        },
-        {
-          line: '地下鉄C線',
-          fromStation: '飯田橋',
-          toStation: toName,
-          departureTime: addMinutes(baseTimeStr, 35),
-          arrivalTime: addMinutes(baseTimeStr, 45),
-          stops: [
-            { name: '飯田橋', time: addMinutes(baseTimeStr, 35), nextSectionColor: CONGESTION_COLORS.low },
-            { name: toName, time: addMinutes(baseTimeStr, 45) }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'route-3',
-      totalDuration: 55,
-      fare: 400,
-      transfers: 0,
-      segments: [
-        {
-          line: '各駅停車D線',
-          fromStation: fromName,
-          toStation: toName,
-          departureTime: addMinutes(baseTimeStr, 2),
-          arrivalTime: addMinutes(baseTimeStr, 57),
-          stops: [
-            { name: fromName, time: addMinutes(baseTimeStr, 2), nextSectionColor: getRandomColor() },
-            { name: '駅1', time: addMinutes(baseTimeStr, 10), nextSectionColor: getRandomColor() },
-            { name: '駅2', time: addMinutes(baseTimeStr, 20), nextSectionColor: getRandomColor() },
-            { name: '駅3', time: addMinutes(baseTimeStr, 35), nextSectionColor: getRandomColor() },
-            { name: '駅4', time: addMinutes(baseTimeStr, 45), nextSectionColor: getRandomColor() },
-            { name: toName, time: addMinutes(baseTimeStr, 57) }
-          ]
-        }
-      ]
-    }
-  ];
-};
-
-export const searchRoutes = async (from: string, to: string, departureTime: string): Promise<RouteResult[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-
-  const baseTime = departureTime ? new Date(`2026-01-01T${departureTime}:00`) : new Date();
+export const searchRoutes = async (from: string, to: string, departureTime?: string): Promise<RouteResult[]> => {
+  // Use local proxy to avoid CORS
+  const endpoint = new URL('/api/', window.location.origin);
+  endpoint.searchParams.append('from', from);
+  endpoint.searchParams.append('to', to);
   
-  const results = generateMockData(from, to, baseTime);
-  mockCache = results; // Update cache
-  return results;
+  // departureTime is optional in API, strict in types but often empty string from UI
+  if (departureTime) {
+    // API expects ISO 8601. If the UI passes just HH:MM, we might need to assume today's date?
+    // The spec says: "departure_time: 任意 | 出発時刻 (ISO 8601形式)。省略時は現在時刻。"
+    // The UI (svelte page) gets 'time' param. If it's just HH:MM, we need to format it.
+    // However, looking at the previous mock implementation, it took HH:MM and made a Date.
+    // Let's assume the UI might pass HH:MM. We should construct a full ISO string if so.
+    
+    if (departureTime.includes('T')) {
+       // Already ISO-like
+       endpoint.searchParams.append('departure_time', departureTime);
+    } else if (departureTime.includes(':')) {
+       // Assume HH:MM for today
+       const now = new Date();
+       const [hours, minutes] = departureTime.split(':').map(Number);
+       now.setHours(hours, minutes, 0, 0);
+       endpoint.searchParams.append('departure_time', now.toISOString());
+    }
+  }
+
+  try {
+    const response = await fetch(endpoint.toString());
+    
+    if (!response.ok) {
+      console.error(`API Error: ${response.status} ${response.statusText}`);
+      return [];
+    }
+
+    const data: ApiSearchResponse = await response.json();
+    
+    const results = data.routes.map(mapRoute);
+    resultCache = results; // Update cache
+    return results;
+  } catch (error) {
+    console.error('Failed to fetch routes:', error);
+    return [];
+  }
 };
 
 export const getRouteById = async (id: string): Promise<RouteResult | undefined> => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  
-  const found = mockCache.find(r => r.id === id);
-  if (found) return found;
-
-  // Fallback if accessed directly (regenerate standard set)
-  const fallback = generateMockData('出発駅', '到着駅', new Date());
-  return fallback.find(r => r.id === id);
+  // Return from cache (synchronous lookup effectively, but keeping async signature)
+  return resultCache.find(r => r.id === id);
 };
