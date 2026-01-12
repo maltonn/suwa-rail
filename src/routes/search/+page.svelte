@@ -80,8 +80,8 @@
               </div>
               
               <div class="route-meta">
-                <span>¥{route.fare}</span>
-                <span class="separator">•</span>
+                <!-- <span>¥{route.fare}</span>
+                <span class="separator">•</span> -->
                 <span>乗換 {route.transfers}回</span>
               </div>
 

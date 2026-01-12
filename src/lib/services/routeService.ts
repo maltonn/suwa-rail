@@ -1,5 +1,6 @@
 // Color mapping for congestion levels (1-7) matching the frontend gradient
 const CONGESTION_COLORS: Record<number, string> = {
+  0: '#dddddd', // gray
   1: '#6366f1', // Indigo
   2: '#3b82f6', // Blue
   3: '#06b6d4', // Cyan

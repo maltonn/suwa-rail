@@ -46,7 +46,7 @@
       <Card padding="30px">
         <div class="summary">
           <div class="total-time">{route.totalDuration}分</div>
-          <div class="fare">¥{route.fare}</div>
+          <!-- <div class="fare">¥{route.fare}</div> -->
         </div>
 
         <div class="timeline">
