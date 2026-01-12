@@ -66,6 +66,7 @@ export interface RouteResult {
 
 // In-memory cache to store search results for detail view
 let resultCache: RouteResult[] = [];
+let lastSearchParams: { from: string; to: string; departureTime?: string } | null = null;
 
 // Helper to map API stop to internal StationStop with color
 const mapStop = (apiStop: ApiStop): StationStop => {
@@ -100,30 +101,43 @@ const mapRoute = (apiRoute: ApiRoute): RouteResult => {
   };
 };
 
+export const getCachedRoutes = (from: string, to: string, departureTime?: string): RouteResult[] | null => {
+  if (
+    lastSearchParams &&
+    lastSearchParams.from === from &&
+    lastSearchParams.to === to &&
+    lastSearchParams.departureTime === departureTime &&
+    resultCache.length > 0
+  ) {
+    return resultCache;
+  }
+  return null;
+};
+
 export const searchRoutes = async (from: string, to: string, departureTime?: string): Promise<RouteResult[]> => {
+  const cached = getCachedRoutes(from, to, departureTime);
+  if (cached) {
+    return cached;
+  }
+
   // Use local proxy to avoid CORS
   const endpoint = new URL('/api/', window.location.origin);
   endpoint.searchParams.append('from', from);
   endpoint.searchParams.append('to', to);
   
-  // departureTime is optional in API, strict in types but often empty string from UI
-  if (departureTime) {
-    // API expects ISO 8601. If the UI passes just HH:MM, we might need to assume today's date?
-    // The spec says: "departure_time: 任意 | 出発時刻 (ISO 8601形式)。省略時は現在時刻。"
-    // The UI (svelte page) gets 'time' param. If it's just HH:MM, we need to format it.
-    // However, looking at the previous mock implementation, it took HH:MM and made a Date.
-    // Let's assume the UI might pass HH:MM. We should construct a full ISO string if so.
+  if (departureTime && departureTime.includes(':')) {
+    const now = new Date();
+    const [hours, minutes] = departureTime.split(':').map(Number);
     
-    if (departureTime.includes('T')) {
-       // Already ISO-like
-       endpoint.searchParams.append('departure_time', departureTime);
-    } else if (departureTime.includes(':')) {
-       // Assume HH:MM for today
-       const now = new Date();
-       const [hours, minutes] = departureTime.split(':').map(Number);
-       now.setHours(hours, minutes, 0, 0);
-       endpoint.searchParams.append('departure_time', now.toISOString());
-    }
+    // Format: YYYY-MM-DDTHH:mm:ss+09:00
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    const DD = String(now.getDate()).padStart(2, '0');
+    const HH = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    
+    const formattedTime = `${YYYY}-${MM}-${DD}T${HH}:${mm}:00+09:00`;
+    endpoint.searchParams.append('departure_time', formattedTime);
   }
 
   try {
@@ -138,6 +152,7 @@ export const searchRoutes = async (from: string, to: string, departureTime?: str
     
     const results = data.routes.map(mapRoute);
     resultCache = results; // Update cache
+    lastSearchParams = { from, to, departureTime };
     return results;
   } catch (error) {
     console.error('Failed to fetch routes:', error);

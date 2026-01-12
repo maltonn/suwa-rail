@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { searchRoutes, type RouteResult } from '$lib/services/routeService';
+  import { searchRoutes, getCachedRoutes, type RouteResult } from '$lib/services/routeService';
   import Card from '$lib/components/Card.svelte';
   import Button from '$lib/components/Button.svelte';
 
@@ -24,6 +24,13 @@
   }
 
   async function loadRoutes() {
+    const cached = getCachedRoutes(fromStation, toStation, departureTime);
+    if (cached) {
+      routes = cached;
+      loading = false;
+      return;
+    }
+
     loading = true;
     routes = await searchRoutes(fromStation, toStation, departureTime);
     loading = false;
@@ -82,12 +89,15 @@
                 {#each route.segments as segment, i}
                   <span class="station-node">{segment.fromStation}</span>
                   
-                  <div class="congestion-line">
-                    {#each segment.stops as stop}
-                      {#if stop.nextSectionColor}
-                        <div class="color-bit" style="background-color: {stop.nextSectionColor}" title="{stop.name}→"></div>
-                      {/if}
-                    {/each}
+                  <div class="line-container">
+                    <span class="line-name-badge">{segment.line}</span>
+                    <div class="congestion-line">
+                      {#each segment.stops as stop}
+                        {#if stop.nextSectionColor}
+                          <div class="color-bit" style="background-color: {stop.nextSectionColor}" title="{stop.name}→"></div>
+                        {/if}
+                      {/each}
+                    </div>
                   </div>
 
                   {#if i === route.segments.length - 1}
@@ -165,6 +175,7 @@
     align-items: center;
     width: 100%;
     overflow-x: hidden;
+    padding: 0.5rem 0;
   }
 
   .station-node {
@@ -175,24 +186,37 @@
     flex-shrink: 0;
   }
 
-  .congestion-line {
+  .line-container {
     flex-grow: 1;
     display: flex;
-    height: 6px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     margin: 0 8px;
+    min-width: 60px;
+  }
+
+  .congestion-line {
+    width: 100%;
+    display: flex;
+    height: 6px;
     border-radius: 3px;
     overflow: hidden;
     background-color: var(--border-color);
-    min-width: 24px;
+  }
+
+  .line-name-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    white-space: nowrap;
+    margin-bottom: 2px;
+    line-height: 1.2;
   }
 
   .color-bit {
     flex-grow: 1;
     height: 100%;
-  }
-  
-  .arrow-sm {
-    color: var(--primary-color);
   }
 
   /* Legend */
